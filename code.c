@@ -49,7 +49,7 @@ struct order{
     struct order *next;
 };
 
-int password = 171103;
+int password;
 int i = 0;
 int menu_id;
 int order_id;
@@ -827,6 +827,7 @@ void manageorders() {
                 clearScreen();
                 display_orders(head_s);
                 load_orders("order_history.txt",&head_h);
+                load_tables_from_file();
                 break;
             case 5:
                 printf("Enter customer name: ");
@@ -912,8 +913,9 @@ void changepassword() {
     scanf("%s", newPassword);
     password = atoi(newPassword); 
     printf(COLOR_BLUE);
-    printf("\nPassword changed successfully!\n");
+    printf("\n\t\t\tPassword changed successfully!\n");
     printf(COLOR_RESET);
+    save_current_id_to_file("password.txt",password);
 }
 
 void authenticate(){
@@ -1423,6 +1425,7 @@ void delete_order(struct order **head, struct order *target_order) {
 
     update_table_status(table_number, 1); 
     update_orders("pending_orders.txt", *head);
+    load_tables_from_file();
 }
 
 int main() {
@@ -1430,6 +1433,7 @@ int main() {
     load_menu(&head_a);
     menu_id = load_current_id_from_file("menu_id.txt");
     order_id = load_current_id_from_file("order_id.txt");
+    password =  load_current_id_from_file("password.txt");
     load_orders("pending_orders.txt", &head_o);
     load_orders("order_serving.txt",&head_s);
     load_orders("order_history.txt",&head_h);
