@@ -201,7 +201,7 @@ void load_tables_from_file(){
 
     fclose(file);
 
-    printf("Tables loaded successfully.\n");
+    // printf("Tables loaded successfully.\n");
 }
 
 void display_available_tables(){
@@ -488,7 +488,9 @@ void place_order() {
     }
 
     if (!table_found) {
-        printf("Sorry, there are no available tables for you.\n");
+        printf(COLOR_RED);
+        printf("\n\nSorry, there are no available tables for you.\n\n\n");
+        printf(COLOR_RESET);
         return;
     }
 
@@ -607,13 +609,40 @@ void addmenu(struct node **head_a) {
     if (foodname[strlen(foodname) - 1] == '\n') {
         foodname[strlen(foodname) - 1] = '\0';
     }
-    strcpy(newNode->foodname, foodname);
     printf(COLOR_RESET);
 
-    printf("\t\t\tEnter price: ");
-    printf(COLOR_RED);
-    scanf("%f", &newNode->price);
-    printf(COLOR_RESET);
+    struct node *current = *head_a;
+    while (current != NULL) {
+        if (strcmp(current->foodname, foodname) == 0) {
+            printf(COLOR_RED "\t\t\tFood name already exists! Please enter a different name.\n" COLOR_RESET);
+            printf("\n\t\t\tEnter food name: ");
+            printf(COLOR_RED);
+            clearBuffer();
+            fgets(foodname, sizeof(foodname), stdin);
+            if (foodname[strlen(foodname) - 1] == '\n') {
+                foodname[strlen(foodname) - 1] = '\0';
+            }
+            printf(COLOR_RESET);
+            current = *head_a;
+        } else {
+            current = current->next;
+        }
+    }
+
+    strcpy(newNode->foodname, foodname);
+
+    float price;
+    do {
+        printf("\t\t\tEnter price: ");
+        printf(COLOR_RED);
+        scanf("%f", &price);
+        printf(COLOR_RESET);
+        if (price <= 0) {
+            printf(COLOR_RED "\t\t\tPrice must be positive! Please enter again.\n" COLOR_RESET);
+        }
+    } while (price <= 0);
+
+    newNode->price = price;
 
     newNode->data = menu_id++;
 
@@ -627,7 +656,6 @@ void addmenu(struct node **head_a) {
         }
         last->next = newNode;
     }
-
     save_item_to_menu(newNode);
     save_current_id_to_file("menu_id.txt", menu_id);
 
@@ -672,7 +700,6 @@ void deletemenu(struct node **head_a) {
 
     int data;
     printf("Enter the number of item to be deleted : ");
-    printf(COLOR_BLUE);
     if (scanf("%d", &data) <= 0) {
         printf(COLOR_RED "Invalid input! Please enter a valid item number.\n" COLOR_RESET);
         clearBuffer();
@@ -700,16 +727,21 @@ void deletemenu(struct node **head_a) {
         prev->next = current->next;
     }
 
-    if (current->next == NULL) {
-        menu_id--;
-        save_current_id_to_file("menu_id.txt", menu_id);
+    struct node *temp = current->next;
+    while (temp != NULL) {
+        temp->data--;
+        temp = temp->next;
     }
+
+    menu_id--;
+    save_current_id_to_file("menu_id.txt", menu_id);
 
     free(current);
 
     printf(COLOR_RED "\nItem Deleted!\n" COLOR_RESET);
     save_menu(head_a); 
 }
+
 
 struct node *linear_search(struct node *head_a, int item_number) {
     struct node *current = head_a;
@@ -824,7 +856,7 @@ void manageorders() {
                 display_orders(head_s);
                 delete_and_save_order(&head_s, 1, "order_serving.txt", "order_history.txt");
                 printf(COLOR_YELLOW "\n\t\t\t\t\t\t\t== SERVING ORDERS ==\n");
-                clearScreen();
+                // clearScreen();
                 display_orders(head_s);
                 load_orders("order_history.txt",&head_h);
                 load_tables_from_file();
@@ -891,7 +923,6 @@ void managemenuitems(){
             case 2:
                 clearScreen();
                 deletemenu(&head_a);
-                clearScreen();
                 displaymenu(head_a);
                 break;
             case 3:
