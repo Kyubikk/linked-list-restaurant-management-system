@@ -96,9 +96,9 @@ void adminmenu3();
 void managehistory();
 void display_orders(struct order *head);
 void update_orders(const char *filename, struct order *head);
-void delete_and_save_order(struct order **head,int up_status, const char *update_filename, const char *delete_filename);
+
+void mark_order(struct order **head, struct order **head_2, int up_status, const char *update_filename, const char *delete_filename);
 void update_table_status(int table_number, int status);
-struct node *find_menu_item(struct node *head, int item_id);
 void display_order_detail(struct order *order);
 void update_order(struct order *target_order, struct node *menu_head);
 void delete_order(struct order **head, struct order *target_order);
@@ -108,6 +108,10 @@ int load_current_id_from_file(const char *filename);
 void save_item_to_menu(struct node *newNode);
 struct node *merge(struct node *left, struct node *right);
 void split(struct node *source, struct node **frontRef, struct node **backRef);
+void delete_item_from_order(struct order *target_order);
+void update_item_quantity(struct order *target_order);
+void add_item_to_order(struct order *target_order, struct node *menu_head);
+
 
 int load_current_id_from_file(const char *filename) {
     FILE *file = fopen(filename, "r");
@@ -259,7 +263,6 @@ void load_menu(struct node **head) {
     fclose(file);
 }
 
-
 void mainmenu(){
     printf(COLOR_YELLOW);
     printf("\n\n\t\t\t Press "COLOR_RED "1"COLOR_YELLOW " for ADMIN\n");
@@ -281,15 +284,12 @@ void displaymenu(struct node *head_a) {
     printf("\t\t\t------------------------------------------------------------------------------\n");
 
     struct node *current = head_a;
-    int count = 1;
     while (current != NULL) {
-        printf("\t\t\t%d.\t\t%-30s\t%.2f\n", count, current->foodname, current->price);
+        printf("\t\t\t%d.\t\t%-30s\t%.2f\n", current->data, current->foodname, current->price);
         current = current->next;
-        count++;
     }
     printf("\t\t\t-------------------------------------------------------------------------------\n\n\n" COLOR_RESET);
 }
-
 
 struct node *merge(struct node *left, struct node *right) {
     struct node *result = NULL;
@@ -539,7 +539,6 @@ void place_order() {
 
     temp_table->is_available = 0;
     save_tables_to_file();
-    load_orders("pending_orders.txt",&head_o);
 }
 
 
@@ -846,19 +845,16 @@ void manageorders() {
                 clearScreen();
                 printf(COLOR_YELLOW "\n\t\t\t\t\t\t\t== PENDING ORDERS ==\n");
                 display_orders(head_o);
-                delete_and_save_order(&head_o, 2, "pending_orders.txt", "order_serving.txt");
-                load_orders("order_serving.txt",&head_s);
-                load_orders("pending_orders.txt",&head_o);
+                mark_order(&head_o,&head_s, 2, "pending_orders.txt", "order_serving.txt");
                 break;
             case 4:
                 clearScreen();
                 printf(COLOR_YELLOW "\n\t\t\t\t\t\t\t== SERVING ORDERS ==\n");
                 display_orders(head_s);
-                delete_and_save_order(&head_s, 1, "order_serving.txt", "order_history.txt");
+                mark_order(&head_s,&head_h, 1, "order_serving.txt", "order_history.txt");
                 printf(COLOR_YELLOW "\n\t\t\t\t\t\t\t== SERVING ORDERS ==\n");
                 // clearScreen();
                 display_orders(head_s);
-                load_orders("order_history.txt",&head_h);
                 load_tables_from_file();
                 break;
             case 5:
@@ -1011,8 +1007,6 @@ void load_orders(const char *file_name, struct order **head) {
         return;
     }
 
-    struct order *current_order = NULL;
-
     int id, status, table_number;
     char customer_name[100];
     float total;
@@ -1034,6 +1028,7 @@ void load_orders(const char *file_name, struct order **head) {
         struct order *new_order = (struct order*)malloc(sizeof(struct order));
         if (new_order == NULL) {
             printf("Memory allocation failed!\n");
+            fclose(file);
             return;
         }
 
@@ -1044,15 +1039,9 @@ void load_orders(const char *file_name, struct order **head) {
         new_order->status = status;
         new_order->table_number = table_number;
         new_order->items = NULL;
-        new_order->next = NULL;
 
-        if (*head == NULL) {
-            *head = new_order;
-            current_order = *head;
-        } else {
-            current_order->next = new_order;
-            current_order = current_order->next;
-        }
+        new_order->next = *head;
+        *head = new_order;
 
         struct order_item *current_item = NULL;
         char foodname[100];
@@ -1062,6 +1051,7 @@ void load_orders(const char *file_name, struct order **head) {
             struct order_item *new_item = (struct order_item*)malloc(sizeof(struct order_item));
             if (new_item == NULL) {
                 printf("Memory allocation failed!\n");
+                fclose(file);
                 return;
             }
 
@@ -1070,9 +1060,9 @@ void load_orders(const char *file_name, struct order **head) {
             new_item->price = price;
             new_item->next = NULL;
 
-            if (current_order->items == NULL) {
-                current_order->items = new_item;
-                current_item = current_order->items;
+            if (new_order->items == NULL) {
+                new_order->items = new_item;
+                current_item = new_order->items;
             } else {
                 current_item->next = new_item;
                 current_item = current_item->next;
@@ -1118,7 +1108,7 @@ void display_orders(struct order *head) {
     }
 }
 
-void delete_and_save_order(struct order **head, int up_status, const char *update_filename, const char *delete_filename) {
+void mark_order(struct order **head, struct order **head_2, int up_status, const char *update_filename, const char *delete_filename) {
     int check = -1;
     if (up_status == 1) {
         check = 1;
@@ -1147,7 +1137,11 @@ void delete_and_save_order(struct order **head, int up_status, const char *updat
         previous->next = current->next;
     }
     current->status = up_status;
+
+    current->next = *head_2;
+    *head_2 = current;
     
+
     write_order_to_file(current, delete_filename);
 
     if (check == 1) {
@@ -1161,18 +1155,12 @@ void delete_and_save_order(struct order **head, int up_status, const char *updat
         }
         update_table_status(current->table_number, 1);
     }
-    printf(COLOR_BLUE"Marked Successfully\n");
+    printf(COLOR_BLUE "Marked Successfully\n");
     printf(COLOR_RESET);
-    struct order_item *current_item = current->items;
-    while (current_item != NULL) {
-        struct order_item *temp_item = current_item;
-        current_item = current_item->next;
-        free(temp_item);
-    }
-    free(current);
+
     update_orders(update_filename, *head);
-    
 }
+
 
 void update_orders(const char *filename, struct order *head) {
     FILE *file = fopen(filename, "w");
@@ -1267,16 +1255,129 @@ void display_order_detail(struct order *order) {
     printf("\t------------------------------------------------------------------------------------------------------------\n");
 }
 
+void display_order_menu() {
+    printf(COLOR_YELLOW "\t\t\tPress " COLOR_RED "1" COLOR_YELLOW " to ADD a new item to the order\n");
+    printf(COLOR_YELLOW "\t\t\tPress " COLOR_RED "2" COLOR_YELLOW " to UPDATE an item's quantity\n");
+    printf(COLOR_YELLOW "\t\t\tPress " COLOR_RED "3" COLOR_YELLOW " to DELETE an item from the order\n");
+    printf(COLOR_YELLOW "\t\t\tPress " COLOR_RED "0" COLOR_YELLOW " to EXIT update order menu\n");
+}
+
+void add_item_to_order(struct order *target_order, struct node *menu_head) {
+    displaymenu(menu_head);
+    int item_id;
+    printf("Enter item ID: ");
+    scanf("%d", &item_id);
+    clearBuffer();
+    struct node *menu_item = linear_search(menu_head, item_id);
+    if (menu_item == NULL) {
+        printf(COLOR_RED "Item not found in the menu!\n" COLOR_RESET);
+        return;
+    }
+    struct order_item *new_item = (struct order_item *)malloc(sizeof(struct order_item));
+    strcpy(new_item->foodname, menu_item->foodname);
+    printf("Enter quantity: ");
+    scanf("%d", &(new_item->quantity));
+    clearBuffer();
+    new_item->price = (menu_item->price) * (new_item->quantity);
+    new_item->next = NULL;
+
+    if (target_order->items == NULL) {
+        target_order->items = new_item;
+    } else {
+        struct order_item *current = target_order->items;
+        while (current->next != NULL) {
+            current = current->next;
+        }
+        current->next = new_item;
+    }
+    target_order->total += new_item->price;
+
+    printf(COLOR_BLUE "Item added successfully!\n" COLOR_RESET);
+}
+
+void update_item_quantity(struct order *target_order) {
+    char foodname[100];
+    printf("\nEnter food name: ");
+    fgets(foodname, sizeof(foodname), stdin);
+    if (foodname[strlen(foodname) - 1] == '\n') {
+        foodname[strlen(foodname) - 1] = '\0';
+    }
+    struct order_item *item = target_order->items;
+    while (item != NULL && strcmp(item->foodname, foodname) != 0) {
+        item = item->next;
+    }
+    if (item == NULL) {
+        printf(COLOR_RED "Item not found!\n" COLOR_RESET);
+    } else {
+        int old_quantity = item->quantity;
+        printf("Enter new quantity: ");
+        int new_quantity;
+        scanf("%d", &new_quantity);
+        clearBuffer();
+
+        float unit_price = item->price / old_quantity;
+        float new_item_price = unit_price * new_quantity;
+
+        item->quantity = new_quantity;
+        item->price = new_item_price;
+
+        target_order->total -= (old_quantity * unit_price);
+        target_order->total += new_item_price;
+        printf(COLOR_BLUE "Quantity updated successfully!\n" COLOR_RESET);
+    }
+}
+
+void delete_item_from_order(struct order *target_order) {
+    char foodname[100];
+    printf("\nEnter food name: ");
+    fgets(foodname, sizeof(foodname), stdin);
+    if (foodname[strlen(foodname) - 1] == '\n') {
+        foodname[strlen(foodname) - 1] = '\0';
+    }
+    struct order_item *item = target_order->items;
+    struct order_item *prev_item = NULL;
+    while (item != NULL && strcmp(item->foodname, foodname) != 0) {
+        prev_item = item;
+        item = item->next;
+    }
+    if (item == NULL) {
+        printf(COLOR_RED "Item not found!\n" COLOR_RESET);
+    } else {
+        if (prev_item == NULL && item->next == NULL) {
+            char confirm;
+            printf("This is the last item in the order. Are you sure you want to delete this order? (y/n): ");
+            scanf(" %c", &confirm);
+            clearBuffer();
+            if (confirm == 'y' || confirm == 'Y') {
+                delete_order(&head_o, target_order);
+                return;
+            } else {
+                return;
+            }
+        } else {
+            target_order->total -= item->price;
+
+            if (prev_item == NULL) {
+                target_order->items = item->next;
+            } else {
+                prev_item->next = item->next;
+            }
+
+            free(item);
+
+            printf(COLOR_BLUE "Item deleted successfully!\n" COLOR_RESET);
+        }
+    }
+}
+
 void update_order(struct order *target_order, struct node *menu_head) {
     float initial_total = target_order->total;
     while (1) {
         printf("Order Information:\n");
         display_order_detail(target_order);
+        display_order_menu();
+
         int choice;
-        printf(COLOR_YELLOW "\t\t\tPress " COLOR_RED "1" COLOR_YELLOW " to ADD a new item to the order\n");
-        printf(COLOR_YELLOW "\t\t\tPress " COLOR_RED "2" COLOR_YELLOW " to UPDATE an item's quantity\n");
-        printf(COLOR_YELLOW "\t\t\tPress " COLOR_RED "3" COLOR_YELLOW " to DELETE an item from the order\n");
-        printf(COLOR_YELLOW "\t\t\tPress " COLOR_RED "0" COLOR_YELLOW " to EXIT update order menu\n");
         printf(COLOR_BLUE "\t\t\tEnter your choice ----> " COLOR_RESET);
         scanf("%d", &choice);
         clearBuffer();
@@ -1287,140 +1388,39 @@ void update_order(struct order *target_order, struct node *menu_head) {
         }
         switch (choice) {
             case 1:
-            {   
-                displaymenu(head_a);
-                int item_id;
-                printf("Enter item ID: ");
-                scanf("%d", &item_id);
-                clearBuffer();
-                struct node *menu_item = linear_search(menu_head, item_id);
-                if (menu_item == NULL) {
-                    printf(COLOR_RED "Item not found in the menu!\n" COLOR_RESET);
-                    break;
-                }
-                struct order_item *new_item = (struct order_item *)malloc(sizeof(struct order_item));
-                strcpy(new_item->foodname, menu_item->foodname);
-                printf("Enter quantity: ");
-                scanf("%d", &(new_item->quantity));
-                clearBuffer();
-                new_item->price = (menu_item->price)*(new_item->quantity);
-                new_item->next = NULL;
-
-                if (target_order->items == NULL) {
-                    target_order->items = new_item;
-                } else {
-                    struct order_item *current = target_order->items;
-                    while (current->next != NULL) {
-                        current = current->next;
-                    }
-                    current->next = new_item;
-                }
-                target_order->total += new_item->price;
-
-                printf(COLOR_BLUE "Item added successfully!\n" COLOR_RESET);
+                add_item_to_order(target_order, menu_head);
                 break;
-            }
             case 2:
-            {
-                char foodname[100];
-                printf("\nEnter food name: ");
-                fgets(foodname, sizeof(foodname), stdin);
-                if (foodname[strlen(foodname) - 1] == '\n') {
-                    foodname[strlen(foodname) - 1] = '\0';
-                }
-                struct order_item *item = target_order->items;
-                while (item != NULL && strcmp(item->foodname, foodname) != 0) {
-                    item = item->next;
-                }
-                if (item == NULL) {
-                    printf(COLOR_RED "Item not found!\n" COLOR_RESET);
-                } else {
-                    int old_quantity = item->quantity;
-                    printf("Enter new quantity: ");
-                    int new_quantity;
-                    scanf("%d", &new_quantity);
-                    clearBuffer();
-                    
-                    float unit_price = item->price / old_quantity;
-                    float new_item_price = unit_price * new_quantity;
-
-                    item->quantity = new_quantity;
-                    item->price = new_item_price;
-
-                    target_order->total -= (old_quantity * unit_price); 
-                    target_order->total += new_item_price; 
-                    printf(COLOR_BLUE "Quantity updated successfully!\n" COLOR_RESET);
-                }
+                update_item_quantity(target_order);
                 break;
-            }
             case 3:
-            {
-                char foodname[100];
-                printf("\nEnter food name: ");
-                fgets(foodname, sizeof(foodname), stdin);
-                if (foodname[strlen(foodname) - 1] == '\n') {
-                    foodname[strlen(foodname) - 1] = '\0';
-                }
-                struct order_item *item = target_order->items;
-                struct order_item *prev_item = NULL;
-                while (item != NULL && strcmp(item->foodname, foodname) != 0) {
-                    prev_item = item;
-                    item = item->next;
-                }
-                if (item == NULL) {
-                    printf(COLOR_RED "Item not found!\n" COLOR_RESET);
-                } else {
-                    if (prev_item == NULL && item->next == NULL) {
-                        char confirm;
-                        printf("This is the last item in the order. Are you sure you want to delete this order? (y/n): ");
-                        scanf(" %c", &confirm);
-                        clearBuffer();
-                        if (confirm == 'y' || confirm == 'Y') {
-                            delete_order(&head_o, target_order);
-                            return;
-                        } else {
-                            break;
-                        }
-                    } else {
-                        target_order->total -= item->price;
-
-                        if (prev_item == NULL) {
-                            target_order->items = item->next;
-                        } else {
-                            prev_item->next = item->next;
-                        }
-
-                        free(item);
-
-                        printf(COLOR_BLUE "Item deleted successfully!\n" COLOR_RESET);
-                    }
-                }
+                delete_item_from_order(target_order);
                 break;
-            }
             default:
                 printf(COLOR_RED "Incorrect Choice! Please choose a valid option.\n" COLOR_RESET);
                 break;
         }
     }
-        float new_total = target_order->total;
 
-        float remaining_due = initial_total - new_total;
-        float surplus = new_total - initial_total;
+    float new_total = target_order->total;
 
-        clearScreen();
+    float remaining_due = initial_total - new_total;
+    float surplus = new_total - initial_total;
 
-        printf("\n\t\t\tInitial Total: $%.2f\n", initial_total);
-        printf("\t\t\tNew Total: $%.2f\n", new_total);
-        if (remaining_due > 0) {
-            printf(COLOR_RED"\t\t\tAmount Due: $%.2f\n"COLOR_RESET, remaining_due);
-        } else if (surplus > 0) {
-            printf(COLOR_BLUE"\t\t\tAmount Surplus: $%.2f\n"COLOR_RESET, surplus);
-        } else {
-            printf("\t\t\tNo change in total amount.\n");
-        }
+    clearScreen();
+
+    printf("\n\t\t\tInitial Total: $%.2f\n", initial_total);
+    printf("\t\t\tNew Total: $%.2f\n", new_total);
+    if (remaining_due > 0) {
+        printf(COLOR_RED"\t\t\tAmount Due: $%.2f\n"COLOR_RESET, remaining_due);
+    } else if (surplus > 0) {
+        printf(COLOR_BLUE"\t\t\tAmount Surplus: $%.2f\n"COLOR_RESET, surplus);
+    } else {
+        printf("\t\t\tNo change in total amount.\n");
+    }
+    
     update_orders("pending_orders.txt", head_o);
 }
-
 
 void delete_order(struct order **head, struct order *target_order) {
     struct order *current = *head;
